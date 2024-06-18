@@ -1,113 +1,237 @@
-import Image from "next/image";
+// app/page.tsx
+
+'use client';
+
+import { useState } from 'react';
 
 export default function Home() {
+  // 状態管理
+  const [barcode, setBarcode] = useState('');
+  const [product, setProduct] = useState<Product | null>(null);
+  const [purchaseList, setPurchaseList] = useState<Product[]>([]);
+  const [quantity, setQuantity] = useState<number>(1);
+  const [totalPrice, setTotalPrice] = useState<number>(0);
+  const [showTotalPopup, setShowTotalPopup] = useState<boolean>(false);
+  const [showQuantityPopup, setShowQuantityPopup] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  // 商品マスタから商品情報を取得（仮実装）
+  const queryProductMaster = async (code: string): Promise<Product | null> => {
+    if (code === 'example-code') {
+      return { name: 'Sample Product', code, price: 1000 };
+    } else {
+      return null;
+    }
+  };
+
+  // 商品情報の読み込み
+  const handleLoadProduct = async () => {
+    // 仮で商品コードを example-code に設定
+    const scannedCode = 'example-code';
+    setBarcode(scannedCode);
+
+    const fetchedProduct = await queryProductMaster(scannedCode);
+    setProduct(fetchedProduct);
+    if (!fetchedProduct) {
+      alert('商品がマスタ未登録です');
+    }
+  };
+
+  // 購入リストに商品を追加
+  const handleAddToList = () => {
+    if (product) {
+      const existingProductIndex = purchaseList.findIndex(item => item.code === product.code);
+      if (existingProductIndex >= 0) {
+        // 既存の商品を更新
+        const updatedList = [...purchaseList];
+        updatedList[existingProductIndex].quantity += 1;
+        setPurchaseList(updatedList);
+      } else {
+        // 新しい商品を追加
+        setPurchaseList([...purchaseList, { ...product, quantity: 1 }]);
+      }
+      setProduct(null);
+      setBarcode('');
+    }
+  };
+
+  // 購入リストから商品を削除
+  const handleRemoveProduct = (code: string) => {
+    const updatedList = purchaseList.filter(item => item.code !== code);
+    setPurchaseList(updatedList);
+    setSelectedProduct(null);
+  };
+
+  // 購入処理
+  const handlePurchase = () => {
+    const total = calculateTotal();
+    setTotalPrice(total);
+    setShowTotalPopup(true);
+  };
+
+  // 合計金額を計算
+  const calculateTotal = () => {
+    return purchaseList.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  };
+
+  // ポップアップを閉じてリセット
+  const handleClosePopup = () => {
+    setShowTotalPopup(false);
+    setPurchaseList([]);
+    setProduct(null);
+    setBarcode('');
+    setTotalPrice(0);
+  };
+
+  // 数量変更ポップアップを表示
+  const handleQuantityChange = (product: Product) => {
+    setSelectedProduct(product);
+    setQuantity(product.quantity);
+    setShowQuantityPopup(true);
+  };
+
+  // 数量を更新
+  const handleQuantityUpdate = () => {
+    if (quantity < 1 || quantity > 99) {
+      setErrorMessage('数量は1~99までの値を選択してください');
+    } else {
+      if (selectedProduct) {
+        const updatedList = purchaseList.map(item =>
+          item.code === selectedProduct.code ? { ...item, quantity } : item
+        );
+        setPurchaseList(updatedList);
+        setShowQuantityPopup(false);
+        setSelectedProduct(null);
+        setProduct(null);
+        setBarcode('');
+        setQuantity(1);
+        setErrorMessage('');
+      }
+    }
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
-      </div>
-
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
+    <div className="flex min-h-screen p-4 bg-white">
+      {/* 左側の列 */}
+      <div className="left-column">
+        <input
+          type="text"
+          value={barcode}
+          onChange={(e) => setBarcode(e.target.value)}
+          placeholder="商品コード"
+          className="border rounded w-full px-2 py-1"
         />
+        <button
+          onClick={handleLoadProduct}
+          className="bg-blue-500 text-white w-full py-2 rounded"
+        >
+          商品コード読み込み
+        </button>
+        <div className="mb-4">
+          <label className="block mb-1">名称:</label>
+          <input
+            type="text"
+            value={product ? product.name : ''}
+            readOnly
+            className="border rounded w-full px-2 py-1"
+          />
+        </div>
+        <div className="mb-4">
+          <label className="block mb-1">単価:</label>
+          <input
+            type="text"
+            value={product ? `¥${product.price}` : ''}
+            readOnly
+            className="border rounded w-full px-2 py-1"
+          />
+        </div>
+        <button
+          onClick={handleAddToList}
+          className="bg-green-500 text-white w-full py-2 rounded"
+        >
+          追加
+        </button>
       </div>
 
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
+      {/* 右側の列 */}
+      <div className="right-column">
+        <h2 className="text-xl mb-2 text-center">購入品目リスト:</h2>
+        <div className="mb-4 border p-4 rounded flex-1 overflow-auto">
+          <ul className="purchase-list">
+            {purchaseList.map((item, index) => (
+              <li key={index} className="purchase-list-item">
+                <div>
+                  {item.name} - {item.quantity}個 - ¥{item.price} - 合計: ¥{item.price * item.quantity}
+                </div>
+                <button
+                  onClick={() => handleQuantityChange(item)}
+                  className="bg-yellow-500 text-white px-2 py-1 rounded ml-4"
+                >
+                  数量変更
+                </button>
+                <button
+                  onClick={() => handleRemoveProduct(item.code)}
+                  className="bg-red-500 text-white px-2 py-1 rounded ml-2"
+                >
+                  削除
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <button onClick={handlePurchase} className="purchase-button">購入</button>
       </div>
-    </main>
+
+      {/* 合計金額ポップアップ */}
+      {showTotalPopup && (
+        <div className="popup-overlay">
+          <div className="popup-content">
+            <h2 className="text-2xl mb-4">合計金額</h2>
+            <p>税込: ¥{totalPrice}</p>
+            <p>税抜: ¥{Math.round(totalPrice / 1.1)}</p>
+            <button onClick={handleClosePopup} className="bg-blue-500 text-white w-full py-2 rounded mt-4">OK</button>
+          </div>
+        </div>
+      )}
+
+      {/* 数量変更ポップアップ */}
+      {showQuantityPopup && (
+        <div className="popup-overlay">
+          <div className="popup-content">
+            <h2 className="text-2xl mb-4">数量変更</h2>
+            {errorMessage && <p className="text-red-500 mb-4">{errorMessage}</p>}
+            <input
+              type="number"
+              min="1"
+              max="99"
+              value={quantity}
+              onChange={(e) => setQuantity(Number(e.target.value))}
+              className="border rounded w-full mb-4 p-2"
+            />
+            <button
+              onClick={handleQuantityUpdate}
+              className="bg-blue-500 text-white w-full py-2 rounded"
+            >
+              更新
+            </button>
+            <button
+              onClick={() => setShowQuantityPopup(false)}
+              className="bg-gray-500 text-white w-full py-2 rounded mt-2"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
+}
+
+// 商品インターフェース
+interface Product {
+  name: string;
+  code: string;
+  price: number;
+  quantity: number;
 }
