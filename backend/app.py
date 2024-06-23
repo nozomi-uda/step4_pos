@@ -28,6 +28,11 @@ def get_db(request: Request):
 # このインスタンスをアノテーションに利用することでエンドポイントを定義できる
 app = FastAPI()
 
+# ルートパス (/) のエンドポイントの追加
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the FastAPI application"}
+
 # Productsの全取得
 @app.get("/products/")
 def read_products(db: Session = Depends(get_db)):
@@ -39,6 +44,9 @@ def read_products(db: Session = Depends(get_db)):
 @app.get("/products/{prd_id}")
 def read_product(prd_id: int, db: Session = Depends(get_db)):
     product = get_prd_info(db, prd_id)
+    # エラーハンドリングの追加 
+    if not product:
+        return JSONResponse(content={"message": "Product not found"}, status_code=404)
     response_data = jsonable_encoder(product)
     return JSONResponse(content=response_data, media_type="application/json; charset=utf-8")
 
@@ -48,6 +56,8 @@ async def create_products(products_in: ProductIn, db: Session = Depends(get_db))
     product = Products(prd_id=products_in.prd_id, code=products_in.code, name=products_in.name, price=products_in.price)
     db.add(product)
     db.commit()
+    # コミット後にセッションをリフレッシュして最新のデータを取得
+    db.refresh(product)
     product = get_prd_info(db, product.prd_id)
     response_data = jsonable_encoder(product)
     return JSONResponse(content=response_data, media_type="application/json; charset=utf-8")
@@ -63,7 +73,8 @@ async def update_product(prd_id: int, code: int, name: str, products_in: Product
     product.name = products_in.name
     product.price = products_in.price
     db.commit()
-    product = get_prd_info(db, prd_id)
+    # update_product エンドポイントの修正
+    db.refresh(product)
     response_data = jsonable_encoder(product)
     return JSONResponse(content=response_data, media_type="application/json; charset=utf-8")
 
@@ -79,7 +90,10 @@ async def delete_product(prd_id: int, db: Session = Depends(get_db)):
 @app.middleware("http")
 async def db_session_middleware(request: Request, call_next):
     request.state.db = SessionLocal()
-    response = await call_next(request)
-    request.state.db.close()
+    # try-finally を使ったセッションクローズ処理の修正
+    try:
+        response = await call_next(request)
+    finally:
+        request.state.db.close()
     response.headers["Content-Type"] = "application/json; charset=utf-8"
     return response
