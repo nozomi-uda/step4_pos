@@ -19,8 +19,8 @@ class ProductIn(BaseModel):
     price: int
 
 # 単一のproduct_infoを取得するためのユーティリティ
-def get_prd_info(db_session: Session, prd_id: int):
-    return db_session.query(Products).filter(Products.prd_id == prd_id).first()
+def get_prd_info(db_session: Session, code: int):
+    return db_session.query(Products).filter(Products.code == code).first()
 
 # DB接続のセッションを各エンドポイントの関数に渡す
 def get_db(request: Request):
@@ -51,9 +51,9 @@ def read_products(db: Session = Depends(get_db)):
     return JSONResponse(content=response_data, media_type="application/json; charset=utf-8")
 
 # 単一のProductsを取得
-@app.get("/products/{prd_id}")
-def read_product(prd_id: int, db: Session = Depends(get_db)):
-    product = get_prd_info(db, prd_id)
+@app.get("/products/{code}")
+def read_product(code: int, db: Session = Depends(get_db)):
+    product = get_prd_info(db, code)
     # エラーハンドリングの追加 
     if not product:
         return JSONResponse(content={"message": "Product not found"}, status_code=404)
