@@ -7,7 +7,7 @@ Base = declarative_base()
 class Products(Base):
     __tablename__ = 'product_master'
     prd_id = Column(Integer, primary_key=True, autoincrement=True)
-    code = Column(String(13), unique=True, nullable=False)
+    code = Column(Integer, unique=True, nullable=False)  # 修正: String -> Integer
     name = Column(String(50), nullable=False)
     price = Column(Integer, nullable=False)
     transaction_details = relationship("TransactionDetails", back_populates="product")
@@ -15,7 +15,7 @@ class Products(Base):
 class Transaction(Base):
     __tablename__ = 'transaction'
     trd_id = Column(Integer, primary_key=True, autoincrement=True)
-    datetime = Column(DateTime, nullable=False)
+    datetime = Column(DateTime, nullable=False, default=datetime.utcnow)
     emp_cd = Column(String(10), nullable=False)
     store_cd = Column(String(5), nullable=False)
     pos_no = Column(String(3), nullable=False)
@@ -27,10 +27,10 @@ class TransactionDetails(Base):
     trd_id = Column(Integer, ForeignKey("transaction.trd_id"))
     dtl_id = Column(Integer, primary_key=True, autoincrement=True)
     prd_id = Column(Integer, ForeignKey("product_master.prd_id"), nullable=False)
-    prd_code = Column(String(13), nullable=False)
+    prd_code = Column(Integer, nullable=False)  # 修正: String -> Integer
     prd_name = Column(String(50), nullable=False)
     prd_price = Column(Integer, nullable=False)
-    quantity = Column(Integer, nullable=False) ## 追加
+    quantity = Column(Integer, nullable=False)
     transaction = relationship("Transaction", back_populates="transaction_details")
     product = relationship("Products", back_populates="transaction_details")
 

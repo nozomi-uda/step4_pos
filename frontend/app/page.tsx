@@ -1,12 +1,17 @@
-// app/page.tsx
-
 'use client';
 
 import { useState } from 'react';
 
+interface Product {
+  name: string;
+  code: string;
+  price: number;
+  quantity: number;
+}
+
 export default function Home() {
   // 状態管理
-  const [barcode, setBarcode] = useState('');
+  const [barcode, setBarcode] = useState<string>('');
   const [product, setProduct] = useState<Product | null>(null);
   const [purchaseList, setPurchaseList] = useState<Product[]>([]);
   const [quantity, setQuantity] = useState<number>(1);
@@ -17,31 +22,32 @@ export default function Home() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // 商品マスタから商品情報を取得
-const queryProductMaster = async (code: string): Promise<Product | null> => {
-  try {
-    const response = await fetch(`http://localhost:8000/products/${code}`);
-    if (response.ok) {
-      const product = await response.json();
-      return product;
-    } else {
+  const queryProductMaster = async (code: number): Promise<Product | null> => {
+    try {
+      const response = await fetch(`http://localhost:8000/products/${code}`);
+      if (response.ok) {
+        const product = await response.json();
+        return product;
+      } else {
+        console.error('Failed to fetch product:', response.statusText);
+        return null;
+      }
+    } catch (error) {
+      console.error('Error fetching product:', error);
       return null;
     }
-  } catch (error) {
-    console.error('商品情報の取得に失敗しました:', error);
-    return null;
-  }
-};
+  };
 
   // 商品情報の読み込み
   const handleLoadProduct = async () => {
-    // 仮で商品コードを example-code に設定
-    const scannedCode = 'example-code';
-    setBarcode(scannedCode);
-
-    const fetchedProduct = await queryProductMaster(scannedCode);
-    setProduct(fetchedProduct);
-    if (!fetchedProduct) {
-      alert('商品がマスタ未登録です');
+    if (typeof barcode === 'number') {
+      const fetchedProduct = await queryProductMaster(barcode);
+      setProduct(fetchedProduct);
+      if (!fetchedProduct) {
+        alert('商品がマスタ未登録です');
+      }
+    } else {
+      alert('有効な商品コードを入力してください');
     }
   };
 
@@ -50,12 +56,10 @@ const queryProductMaster = async (code: string): Promise<Product | null> => {
     if (product) {
       const existingProductIndex = purchaseList.findIndex(item => item.code === product.code);
       if (existingProductIndex >= 0) {
-        // 既存の商品を更新
         const updatedList = [...purchaseList];
         updatedList[existingProductIndex].quantity += 1;
         setPurchaseList(updatedList);
       } else {
-        // 新しい商品を追加
         setPurchaseList([...purchaseList, { ...product, quantity: 1 }]);
       }
       setProduct(null);
@@ -64,42 +68,42 @@ const queryProductMaster = async (code: string): Promise<Product | null> => {
   };
 
   // 購入リストから商品を削除
-  const handleRemoveProduct = (code: string) => {
+  const handleRemoveProduct = (code: number) => {
     const updatedList = purchaseList.filter(item => item.code !== code);
     setPurchaseList(updatedList);
     setSelectedProduct(null);
   };
 
   // 購入処理
-const handlePurchase = async () => {
-  const total = calculateTotal();
-  setTotalPrice(total);
-  try {
-    const response = await fetch('http://localhost:8000/transactions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        purchaseList: purchaseList.map(item => ({
-          code: item.code,
-          name: item.name,
-          quantity: item.quantity,
-          price: item.price,
-        })),
-        total,
-      }),
-    });
-    if (response.ok) {
-      console.log('取引が正常に格納されました');
-    } else {
-      console.error('取引の格納に失敗しました');
+  const handlePurchase = async () => {
+    const total = calculateTotal();
+    setTotalPrice(total);
+    try {
+      const response = await fetch('http://localhost:8000/transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          purchaseList: purchaseList.map(item => ({
+            code: item.code,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+          })),
+          total,
+        }),
+      });
+      if (response.ok) {
+        console.log('取引が正常に格納されました');
+      } else {
+        console.error('取引の格納に失敗しました');
+      }
+    } catch (error) {
+      console.error('取引の格納中にエラーが発生しました:', error);
     }
-  } catch (error) {
-    console.error('取引の格納中にエラーが発生しました:', error);
-  }
-  setShowTotalPopup(true);
-};
+    setShowTotalPopup(true);
+  };
 
   // 合計金額を計算
   const calculateTotal = () => {
@@ -147,9 +151,9 @@ const handlePurchase = async () => {
       {/* 左側の列 */}
       <div className="left-column">
         <input
-          type="text"
+          type="number"
           value={barcode}
-          onChange={(e) => setBarcode(e.target.value)}
+          onChange={(e) => setBarcode(e.target.value ? Number(e.target.value) : '')}
           placeholder="商品コード"
           className="border rounded w-full px-2 py-1"
         />
@@ -211,7 +215,9 @@ const handlePurchase = async () => {
             ))}
           </ul>
         </div>
-        <button onClick={handlePurchase} className="purchase-button">購入</button>
+        <button onClick={handlePurchase} className="purchase-button bg-blue-500 text-white w-full py-2 rounded">
+          購入
+        </button>
       </div>
 
       {/* 合計金額ポップアップ */}
@@ -257,12 +263,4 @@ const handlePurchase = async () => {
       )}
     </div>
   );
-}
-
-// 商品インターフェース
-interface Product {
-  name: string;
-  code: string;
-  price: number;
-  quantity: number;
 }
