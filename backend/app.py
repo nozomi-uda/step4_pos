@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from db_control.mymodels import Products
 from db_control.connect import engine
 from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.cors import CORSMiddleware
 
 # DB接続用のセッションクラス インスタンスが作成されると接続する
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -27,6 +28,15 @@ def get_db(request: Request):
 
 # このインスタンスをアノテーションに利用することでエンドポイントを定義できる
 app = FastAPI()
+
+# CORS設定の追加
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 必要に応じてドメインを指定
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ルートパス (/) のエンドポイントの追加
 @app.get("/")
