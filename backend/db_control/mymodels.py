@@ -30,7 +30,6 @@ class TransactionDetails(Base):
     prd_code = Column(Integer, nullable=False)  # 修正: String -> Integer
     prd_name = Column(String(50), nullable=False)
     prd_price = Column(Integer, nullable=False)
-    quantity = Column(Integer, nullable=False)
     transaction = relationship("Transaction", back_populates="transaction_details")
     product = relationship("Products", back_populates="transaction_details")
 

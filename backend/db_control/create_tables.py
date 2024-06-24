@@ -1,8 +1,10 @@
 import platform
 print(platform.uname())
 
-from mymodels import Base #, User, Comment
+from mymodels import Products, Transaction, TransactionDetail
 from connect import engine
 
 print("Creating tables >>> ")
-Base.metadata.create_all(bind=engine)
+Products.metadata.create_all(bind=engine)
+Transaction.metadata.create_all(bind=engine)
+TransactionDetail.metadata.create_all(bind=engine)

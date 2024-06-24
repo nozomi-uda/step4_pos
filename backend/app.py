@@ -3,10 +3,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from pydantic import BaseModel
-from db_control.mymodels import Products
+from db_control.mymodels import Products, Transaction, TransactionDetails
 from db_control.connect import engine
+from datetime import datetime
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
+from typing import List
 
 # DB接続用のセッションクラス インスタンスが作成されると接続する
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -17,6 +19,9 @@ class ProductIn(BaseModel):
     code: int
     name: str
     price: int
+
+class ProductPurchase(BaseModel):
+    code: int
 
 # 単一のproduct_infoを取得するためのユーティリティ
 def get_prd_info(db_session: Session, code: int):
@@ -107,3 +112,35 @@ async def db_session_middleware(request: Request, call_next):
         request.state.db.close()
     response.headers["Content-Type"] = "application/json; charset=utf-8"
     return response
+
+# 購入用API
+@app.post("/purchase/")
+async def purchase_product(products: List[ProductPurchase], db: Session = Depends(get_db)):
+    transaction = Transaction(
+        datetime=datetime.now(),
+        emp_cd = "aaaaaaaaaa", #frontで登録する情報がないのでダミー
+        store_cd = "bbbbb", #frontで登録する情報がないのでダミー
+        pos_no = "ccc", #frontで登録する情報がないのでダミー
+        total_amt=0
+        )
+    db.add(transaction)
+    db.commit()
+    total_amt=0
+    for product in products:
+        db_product = get_prd_info(db, product.code)
+        if not db_product:
+            return JSONResponse(content={"message": "Product not found"}, status_code=404)
+        total_amt += db_product.price
+        transaction_detail = TransactionDetails(
+            trd_id = transaction.trd_id,
+            prd_id = db_product.prd_id,
+            prd_code = db_product.code,
+            prd_name = db_product.name,
+            prd_price = db_product.price
+        )
+        db.add(transaction_detail)
+    transaction.total_amt = total_amt
+    db.commit()
+    db.refresh(transaction)
+    response_data = jsonable_encoder(transaction)
+    return JSONResponse(content=response_data, media_type="application/json; charset=utf-8")
