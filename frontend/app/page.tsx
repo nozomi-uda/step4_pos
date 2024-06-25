@@ -9,20 +9,26 @@ interface Product {
   quantity: number;
 }
 
+interface PurchaseResponse {
+  success: boolean;
+  total_price: number;
+  total_price_ex_tax: number;
+}
+
 export default function Home() {
-  // 状態管理
   const [barcode, setBarcode] = useState<string>('');
   const [product, setProduct] = useState<Product | null>(null);
   const [purchaseList, setPurchaseList] = useState<Product[]>([]);
   const [quantity, setQuantity] = useState<number>(1);
   const [totalPrice, setTotalPrice] = useState<number>(0);
+  const [totalPriceExTax, setTotalPriceExTax] = useState<number>(0);
   const [showTotalPopup, setShowTotalPopup] = useState<boolean>(false);
   const [showQuantityPopup, setShowQuantityPopup] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // 商品マスタから商品情報を取得
-  const queryProductMaster = async (code: number): Promise<Product | null> => {
+  const queryProductMaster = async (code: string): Promise<Product | null> => {
     try {
       const response = await fetch(`http://localhost:8000/products/${code}`);
       if (response.ok) {
@@ -40,7 +46,7 @@ export default function Home() {
 
   // 商品情報の読み込み
   const handleLoadProduct = async () => {
-    if (typeof barcode === 'number') {
+    if (barcode) {
       const fetchedProduct = await queryProductMaster(barcode);
       setProduct(fetchedProduct);
       if (!fetchedProduct) {
@@ -68,7 +74,7 @@ export default function Home() {
   };
 
   // 購入リストから商品を削除
-  const handleRemoveProduct = (code: number) => {
+  const handleRemoveProduct = (code: string) => {
     const updatedList = purchaseList.filter(item => item.code !== code);
     setPurchaseList(updatedList);
     setSelectedProduct(null);
@@ -76,38 +82,40 @@ export default function Home() {
 
   // 購入処理
   const handlePurchase = async () => {
-    const total = calculateTotal();
-    setTotalPrice(total);
     try {
-      const response = await fetch('http://localhost:8000/transactions', {
+      const empCode = 'your_emp_code';  // レジ担当者コード
+      const storeCode = '30';  // 店舗コード
+      const posId = '90';  // POS機ID
+
+      const payload = {
+        emp_code: empCode,
+        store_code: storeCode,
+        pos_id: posId,
+        products: purchaseList.map(item => ({ code: item.code }))
+      };
+
+      console.log('Sending purchase request with payload:', payload);
+      
+      const response = await fetch('http://localhost:8000/purchase/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          purchaseList: purchaseList.map(item => ({
-            code: item.code,
-            name: item.name,
-            quantity: item.quantity,
-            price: item.price,
-          })),
-          total,
-        }),
+        body: JSON.stringify(payload),
       });
+
       if (response.ok) {
-        console.log('取引が正常に格納されました');
+        const purchaseResponse: PurchaseResponse = await response.json();
+        console.log('Received purchase response:', purchaseResponse);
+        setTotalPrice(purchaseResponse.total_price);
+        setTotalPriceExTax(purchaseResponse.total_price_ex_tax);
+        setShowTotalPopup(true);
       } else {
-        console.error('取引の格納に失敗しました');
+        console.error('Failed to store transaction:', response.statusText);
       }
     } catch (error) {
-      console.error('取引の格納中にエラーが発生しました:', error);
+      console.error('Error storing transaction:', error);
     }
-    setShowTotalPopup(true);
-  };
-
-  // 合計金額を計算
-  const calculateTotal = () => {
-    return purchaseList.reduce((sum, item) => sum + item.price * item.quantity, 0);
   };
 
   // ポップアップを閉じてリセット
@@ -117,6 +125,7 @@ export default function Home() {
     setProduct(null);
     setBarcode('');
     setTotalPrice(0);
+    setTotalPriceExTax(0);
   };
 
   // 数量変更ポップアップを表示
@@ -151,9 +160,9 @@ export default function Home() {
       {/* 左側の列 */}
       <div className="left-column">
         <input
-          type="number"
+          type="text"
           value={barcode}
-          onChange={(e) => setBarcode(e.target.value ? Number(e.target.value) : '')}
+          onChange={(e) => setBarcode(e.target.value)}
           placeholder="商品コード"
           className="border rounded w-full px-2 py-1"
         />
@@ -226,7 +235,7 @@ export default function Home() {
           <div className="popup-content">
             <h2 className="text-2xl mb-4">合計金額</h2>
             <p>税込: ¥{totalPrice}</p>
-            <p>税抜: ¥{Math.round(totalPrice / 1.1)}</p>
+            <p>税抜: ¥{totalPriceExTax}</p>
             <button onClick={handleClosePopup} className="bg-blue-500 text-white w-full py-2 rounded mt-4">OK</button>
           </div>
         </div>

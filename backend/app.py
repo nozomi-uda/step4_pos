@@ -9,11 +9,13 @@ from datetime import datetime
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
+import logging
 
-# DB接続用のセッションクラス インスタンスが作成されると接続する
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Pydanticを用いたAPIに渡されるデータの定義 ValidationやDocumentationの機能が追加される
 class ProductIn(BaseModel):
     prd_id: int
     code: int
@@ -23,61 +25,61 @@ class ProductIn(BaseModel):
 class ProductPurchase(BaseModel):
     code: int
 
-# 単一のproduct_infoを取得するためのユーティリティ
+class PurchaseRequest(BaseModel):
+    emp_code: str
+    store_code: str
+    pos_id: str
+    products: List[ProductPurchase]
+
+class PurchaseResponse(BaseModel):
+    success: bool
+    total_price: int
+    total_price_ex_tax: int
+
 def get_prd_info(db_session: Session, code: int):
     return db_session.query(Products).filter(Products.code == code).first()
 
-# DB接続のセッションを各エンドポイントの関数に渡す
 def get_db(request: Request):
     return request.state.db
 
-# このインスタンスをアノテーションに利用することでエンドポイントを定義できる
 app = FastAPI()
 
-# CORS設定の追加
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # 必要に応じてドメインを指定
+    allow_origins=["http://localhost:3000"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ルートパス (/) のエンドポイントの追加
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the FastAPI application"}
 
-# Productsの全取得
 @app.get("/products/")
 def read_products(db: Session = Depends(get_db)):
     products = db.query(Products).all()
     response_data = jsonable_encoder(products)
     return JSONResponse(content=response_data, media_type="application/json; charset=utf-8")
 
-# 単一のProductsを取得
 @app.get("/products/{code}")
 def read_product(code: int, db: Session = Depends(get_db)):
     product = get_prd_info(db, code)
-    # エラーハンドリングの追加 
     if not product:
         return JSONResponse(content={"message": "Product not found"}, status_code=404)
     response_data = jsonable_encoder(product)
     return JSONResponse(content=response_data, media_type="application/json; charset=utf-8")
 
-# Productsを登録
 @app.post("/products/")
 async def create_products(products_in: ProductIn, db: Session = Depends(get_db)):
     product = Products(prd_id=products_in.prd_id, code=products_in.code, name=products_in.name, price=products_in.price)
     db.add(product)
     db.commit()
-    # コミット後にセッションをリフレッシュして最新のデータを取得
     db.refresh(product)
     product = get_prd_info(db, product.prd_id)
     response_data = jsonable_encoder(product)
     return JSONResponse(content=response_data, media_type="application/json; charset=utf-8")
 
-# Productsを更新
 @app.put("/products/{prd_id}")
 async def update_product(prd_id: int, code: int, name: str, products_in: ProductIn, db: Session = Depends(get_db)):
     product = get_prd_info(db, prd_id)
@@ -88,12 +90,10 @@ async def update_product(prd_id: int, code: int, name: str, products_in: Product
     product.name = products_in.name
     product.price = products_in.price
     db.commit()
-    # update_product エンドポイントの修正
     db.refresh(product)
     response_data = jsonable_encoder(product)
     return JSONResponse(content=response_data, media_type="application/json; charset=utf-8")
 
-# Productsを削除
 @app.delete("/products/{prd_id}")
 async def delete_product(prd_id: int, db: Session = Depends(get_db)):
     product = get_prd_info(db, prd_id)
@@ -101,11 +101,9 @@ async def delete_product(prd_id: int, db: Session = Depends(get_db)):
     db.commit()
     return JSONResponse(content={"message": "Product deleted"}, media_type="application/json; charset=utf-8")
 
-# リクエストの度に呼ばれるミドルウェア DB接続用のセッションインスタンスを作成
 @app.middleware("http")
 async def db_session_middleware(request: Request, call_next):
     request.state.db = SessionLocal()
-    # try-finally を使ったセッションクローズ処理の修正
     try:
         response = await call_next(request)
     finally:
@@ -113,34 +111,45 @@ async def db_session_middleware(request: Request, call_next):
     response.headers["Content-Type"] = "application/json; charset=utf-8"
     return response
 
-# 購入用API
 @app.post("/purchase/")
-async def purchase_product(products: List[ProductPurchase], db: Session = Depends(get_db)):
+async def purchase_product(purchase_request: PurchaseRequest, db: Session = Depends(get_db)):
+    logger.info("Received purchase request: %s", purchase_request)
     transaction = Transaction(
         datetime=datetime.now(),
-        emp_cd = "aaaaaaaaaa", #frontで登録する情報がないのでダミー
-        store_cd = "bbbbb", #frontで登録する情報がないのでダミー
-        pos_no = "ccc", #frontで登録する情報がないのでダミー
+        emp_cd=purchase_request.emp_code if purchase_request.emp_code else '9999999999',
+        store_cd='30',
+        pos_no='90',
         total_amt=0
-        )
+    )
     db.add(transaction)
     db.commit()
-    total_amt=0
-    for product in products:
+    db.refresh(transaction)
+    
+    total_ex_tax = 0
+    total = 0
+    tax_rate = 0.1  # 消費税率10%
+
+    for product in purchase_request.products:
         db_product = get_prd_info(db, product.code)
         if not db_product:
+            logger.error("Product not found: %s", product.code)
             return JSONResponse(content={"message": "Product not found"}, status_code=404)
-        total_amt += db_product.price
+        total_ex_tax += db_product.price
+        total += int(db_product.price * (1 + tax_rate))
         transaction_detail = TransactionDetails(
-            trd_id = transaction.trd_id,
-            prd_id = db_product.prd_id,
-            prd_code = db_product.code,
-            prd_name = db_product.name,
-            prd_price = db_product.price
+            trd_id=transaction.trd_id,
+            prd_id=db_product.prd_id,
+            prd_code=db_product.code,
+            prd_name=db_product.name,
+            prd_price=db_product.price,
+            tax_type='10'
         )
         db.add(transaction_detail)
-    transaction.total_amt = total_amt
+    
+    transaction.total_amt = total
     db.commit()
     db.refresh(transaction)
-    response_data = jsonable_encoder(transaction)
-    return JSONResponse(content=response_data, media_type="application/json; charset=utf-8")
+
+    response_data = PurchaseResponse(success=True, total_price=total, total_price_ex_tax=total_ex_tax)
+    logger.info("Returning response: %s", response_data)
+    return JSONResponse(content=jsonable_encoder(response_data), media_type="application/json; charset=utf-8")

@@ -32,6 +32,7 @@ class TransactionDetails(Base):
     prd_price = Column(Integer, nullable=False)
     transaction = relationship("Transaction", back_populates="transaction_details")
     product = relationship("Products", back_populates="transaction_details")
+    tax_type = Column(String)  # 修正消費税追加
 
 # データベースエンジンの作成
 # engine = create_engine('sqlite:///POS.db', echo=True, connect_args={'check_same_thread': False})
