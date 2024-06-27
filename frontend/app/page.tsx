@@ -80,22 +80,21 @@ export default function Home() {
     setSelectedProduct(null);
   };
 
-  // 購入処理
   const handlePurchase = async () => {
     try {
       const empCode = 'your_emp_code';  // レジ担当者コード
       const storeCode = '30';  // 店舗コード
-      const posId = '90';  // POS機ID
+      const posNo = '90';  // POS機no
 
       const payload = {
         emp_code: empCode,
         store_code: storeCode,
-        pos_id: posId,
-        products: purchaseList.map(item => ({ code: item.code }))
+        pos_no: posNo,
+        products: purchaseList.map(item => ({ code: item.code, quantity: item.quantity }))  // 数量を含める
       };
 
       console.log('Sending purchase request with payload:', payload);
-      
+
       const response = await fetch('http://localhost:8000/purchase/', {
         method: 'POST',
         headers: {
@@ -105,7 +104,7 @@ export default function Home() {
       });
 
       if (response.ok) {
-        const purchaseResponse: PurchaseResponse = await response.json();
+        const purchaseResponse = await response.json();
         console.log('Received purchase response:', purchaseResponse);
         setTotalPrice(purchaseResponse.total_price);
         setTotalPriceExTax(purchaseResponse.total_price_ex_tax);
@@ -117,6 +116,7 @@ export default function Home() {
       console.error('Error storing transaction:', error);
     }
   };
+
 
   // ポップアップを閉じてリセット
   const handleClosePopup = () => {

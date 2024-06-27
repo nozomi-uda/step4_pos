@@ -24,11 +24,12 @@ class ProductIn(BaseModel):
 
 class ProductPurchase(BaseModel):
     code: int
+    quantity: int
 
 class PurchaseRequest(BaseModel):
     emp_code: str
     store_code: str
-    pos_id: str
+    pos_no: str
     products: List[ProductPurchase]
 
 class PurchaseResponse(BaseModel):
@@ -117,14 +118,14 @@ async def purchase_product(purchase_request: PurchaseRequest, db: Session = Depe
     transaction = Transaction(
         datetime=datetime.now(),
         emp_cd=purchase_request.emp_code if purchase_request.emp_code else '9999999999',
-        store_cd='30',
-        pos_no='90',
+        store_cd=purchase_request.store_code if purchase_request.store_code else '55555',
+        pos_no=purchase_request.pos_no if purchase_request.pos_no else '333',
         total_amt=0
     )
     db.add(transaction)
     db.commit()
     db.refresh(transaction)
-    
+
     total_ex_tax = 0
     total = 0
     tax_rate = 0.1  # 消費税率10%
@@ -134,18 +135,19 @@ async def purchase_product(purchase_request: PurchaseRequest, db: Session = Depe
         if not db_product:
             logger.error("Product not found: %s", product.code)
             return JSONResponse(content={"message": "Product not found"}, status_code=404)
-        total_ex_tax += db_product.price
-        total += int(db_product.price * (1 + tax_rate))
+        total_ex_tax += db_product.price * product.quantity
+        total += int(db_product.price * product.quantity * (1 + tax_rate))
         transaction_detail = TransactionDetails(
             trd_id=transaction.trd_id,
             prd_id=db_product.prd_id,
             prd_code=db_product.code,
             prd_name=db_product.name,
             prd_price=db_product.price,
+            quantity=product.quantity,
             tax_type='10'
         )
         db.add(transaction_detail)
-    
+
     transaction.total_amt = total
     db.commit()
     db.refresh(transaction)
